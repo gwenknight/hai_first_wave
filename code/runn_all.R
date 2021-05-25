@@ -3,31 +3,25 @@
 ### Simulation function
 ## Calculate the contribution of nosocomial cases to the overall epidemic in a single Trust
 
-run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, so_scen = 1){
+run_hosp_traj <- function(trusts_in, location_store, los_data, nsims, disch_time, so_scen = 1){
   ## Input
   # trusts = which trusts / settings to run the analysis on 
   # location_store = folder to store in
   # los_data = los data
   
   ## Conditions 
-  onset_cutoffs <- c(5,8,14) # threshold for noso definition
+  onset_cutoffs <- c(5,8,15) # threshold for noso definition
   
   # number of simulations
-  df_noso_input <- read_csv(paste0("output_all_trusts/total_numbers/",trusts[1],"_noso_numbers_by_trust.csv"))[,c(-1)]
+  df_noso_input <- read_csv(paste0("output_all_trusts/total_numbers/",trusts_in[1],"_noso_numbers_by_trust.csv"))[,c(-1)] # just first for number of simulations
   n_sims = min(nsims, max(df_noso_input$sample))
   
   #### Read in data
-  # Proportion detected per week 
-  #nn <- read.csv("output_all_trusts/trusts_prop_detect.csv")[,-1]
+  p1_s_v <- read.csv("data/200_mean_inc_dist.csv")[,-1] # incubation period for each simulation
+  p2_s_v <- read.csv("data/200_sd_inc_dist.csv")[,-1] # incubation period for each simulation
   
-  # Nosocomial cases 
-  #cocin_clean <- read.csv("data/cocin_clean.csv")
-  
-  # Los data
-  #los_data <- read.csv("data/all_los.csv")[,-1]
-  
-  # prop COCIN in SUS
-  #prop_cocin_in_sus <- read.csv("output_all_trusts/prop_cocin_in_sus.csv")
+  prop_miss_hosp_v <- read.csv("data/200_miss_hosp.csv")[,-1] # proportion missed to hospital for each simulation
+  prop_comm_hosp_v <- read.csv("data/200_comm_hosp.csv")[,-1] # proportion community to hospital for each simulation 
   
   #### Changing transmission
   rt_orig <- read.csv("data/rt.csv")
@@ -35,8 +29,6 @@ run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, s
   
   #### Nosocomial numbers
   #df_noso_eg <- read.csv("output_all_trusts/noso_numbers_by_trust.csv")
-  
-  
   
   ## Weeks to run through
   weeks = c(1, max(los_data$week))
@@ -47,10 +39,15 @@ run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, s
   ######************************************************************************************************************************************************
   
   ## Loop through all the conditions needed to explore 
-  for(iii in trusts){ # places
-    
+  for(iii in trusts_in){ # places
     
     df_noso_input <- read_csv(paste0("output_all_trusts/total_numbers/",iii,"_noso_numbers_by_trust.csv"))[,-1]
+    
+    ## Check no 0 factor_missed making 0 n_missed: 
+    w<-which(is.na(df_noso_input$n_missed))
+    if(length(w)>0){
+      df_noso_input[w,c("prop_detect","n_missed","n_ad")] <- 0
+    }
     
     for(kkk in onset_cutoffs){ # onset cutoffs
       store_this <- c()
@@ -73,10 +70,20 @@ run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, s
           print(rrg)
           
           df_nosos <- df_noso %>% filter(sample == rrg)
+          # incubation period for this simulation 
+          params$time_inf_to_symp_mean <- p1_s_v[rrg]
+          params$time_inf_to_symp_sd <- p2_s_v[rrg]
+          
+          # proportion to hospital for this simulation 
+          params$prop_miss_hosp <- prop_miss_hosp_v[rrg]
+          params$prop_comm_hosp <- prop_comm_hosp_v[rrg]
+          
+          # SAMPLE LOS 
+          los_sample <- prob_los_o %>% filter(sample == rrg)
           
           if(sum(df_nosos$n_noso_o)> 0){ # If there are any nosocomial cases
             #### Run model 
-            p <- perc_nosocomial_trust_week(df_nosos, params, prob_los_o, rt_in, disch_time, so_scen = so_scen)
+            p <- perc_nosocomial_trust_week(df_nosos, params, los_sample, rt_in, disch_time, so_scen = so_scen)
             
             ## STORE
             store_this <- rbind(store_this, 
@@ -145,7 +152,7 @@ run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, s
   
   names <- c("place", "cutoff", "detect_date", "n_noso_o", 
              "n_all_o", "n_noso", "n_all", "week_detect", "factor_missed", 
-             "prop_ad", "week", "n_missed", "n_ad", "n_missed_disch", "n_missed_ad_disch", 
+             "prop_ad", "week", "prop_detect","n_missed", "n_missed_old","n_ad", "n_missed_disch", "n_missed_ad_disch", 
              "n_miss_hosp_case", "n_miss_hosp_case_ad", "n_miss_hosp_case_in14", 
              "n_miss_hosp_case_in14_ad", "readmin_nc", "readmin_nc_ad", "fstgen_inf", 
              "fstgen_cases", "scdgen_inf", "scdgen_cases", "trdgen_inf", "trdgen_cases", 
@@ -162,7 +169,7 @@ run_hosp_traj <- function(trusts, location_store, los_data, nsims, disch_time, s
   )
   # 
   # ###### Grab all together 
-  df <- list.files(path=paste0(location_store,"/sims",disch_time,"/"), full.names = TRUE) %>%
+  df <- list.files(path=paste0(location_store,"/sims",disch_time), full.names = TRUE) %>% #,pattern = paste0(trusts_in,"_"), full.names = TRUE) %>%
     lapply(fread) %>%
     bind_rows
   store1 <- df

@@ -131,6 +131,8 @@ los_all$place <- los_all$Procode
 w<-which(los_all$los.days == 0)
 los_all$los.days <- as.numeric(los_all$los.days)
 los_all[w,"los.days"] <- as.numeric(unlist(los_all[w,"los.days"])) + 0.5 # add 0.5 to 0 so that it is actually a time
+los_all$total_admin <- los_all$n # confusing with England being total admin = total per los day 
+
 
 los_use <- rbind(los_eng[,c("place","week","los.days","total_admin","prop")],
                  los_all[,c("place","week","los.days","total_admin","prop")])
@@ -195,13 +197,13 @@ for(ii in los_trusts){
     ws <- which(los_herew$los.days == 0.5)
     if(length(ws)>0){ # if there is something at 0.5
       if(length(los_herew[,1])>1){ # and after 0.5!
-      los_start <- los_herew[ws,] %>%
-        dplyr::select(place, week, los.days , total_admin, prop)
-      
-      los_end <- los_herew[-ws,] %>%
-        dplyr::select(place, week, los.days , total_admin, prop) %>%
-        complete(week,los.days = 1:max(10,los_herew$los.days),fill=list(prop = 0, total_admin = 0, place = ii)) # make sure have a value for each possible los
-      los_herew2 <- rbind(los_start, los_end)
+        los_start <- los_herew[ws,] %>%
+          dplyr::select(place, week, los.days , total_admin, prop)
+        
+        los_end <- los_herew[-ws,] %>%
+          dplyr::select(place, week, los.days , total_admin, prop) %>%
+          complete(week,los.days = 1:max(10,los_herew$los.days),fill=list(prop = 0, total_admin = 0, place = ii)) # make sure have a value for each possible los
+        los_herew2 <- rbind(los_start, los_end)
       }else{ # if nothing apart 0.5 then
         los_herew2 <- los_herew %>%
           dplyr::select(place, week, los.days , total_admin, prop) %>%
@@ -237,20 +239,20 @@ los_use_complete$valu = los_use_complete$los.days*los_use_complete$prop
 
 llm <- los_use_complete %>% group_by(place, week) %>%
   summarise(sum = sum(valu))
-g <- ggplot(llm, aes(x=week, y = sum)) + geom_point() +  geom_line(aes(col = place)) + 
+g <- ggplot(llm %>% filter(place == "ENG"), aes(x=week, y = sum)) + geom_point() +  geom_line(aes(col = place)) + 
   facet_wrap(~place) + 
   scale_x_continuous("Week") + 
   scale_y_continuous("Mean length of stay", lim = c(0,3.6)) + 
   geom_vline(xintercept = minwk, lty = "dashed") +
   geom_vline(xintercept = maxwk, lty = "dashed") 
-ggsave("output_all_trusts/mean_los_sus_eg_trust.pdf")
+ggsave("output_figs/mean_los_ENG.jpeg")
 
 g + scale_x_continuous("Week", lim = c(3,35))
 ggsave("output_all_trusts/mean_los_sus_eg_trust_zoom.pdf")
 
 
 llm %>% group_by(place) %>%
-  summarise(mean = mean(sum), sd = sd(sum), median = median(sum), iqr(sum)) %>% 
+  summarise(mean = mean(sum), sd = sd(sum), median = median(sum), iqr =  iqr(sum)) %>% 
   ggplot(aes(x=place, y = mean)) + geom_point()
 
 ### save trusts

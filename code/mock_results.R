@@ -18,10 +18,17 @@ library(RColorBrewer)
 library(boot)
 
 #### Read in data
-setwd(here())
+# Proportion detected per week 
+#nn <- read.csv("output_all_trusts/trusts_prop_detect.csv")[,-1]
+
+# Nosocomial cases 
+#cocin_clean <- read.csv("data/cocin_clean.csv")
 
 # Los data
 los_data <- read.csv("data/mock_los.csv")[,-1]
+
+# prop COCIN in SUS
+#prop_cocin_in_sus <- read.csv("output_all_trusts/prop_cocin_in_sus.csv")
 
 ## MAIN SIMULATION NEEDS THESE FUNCTIONS
 # How long until discharged after infection? 
@@ -44,25 +51,42 @@ source("code/analyse_store.R")
 # Function to runn 
 source("code/runn_all.R")
 
+# 200 simulation values for 
+# (a) proportion of missed infections that get hospitalised
+# Generate once
+#prop_miss_hosp_v <- runif(200,params$prop_miss_hosp_min, params$prop_miss_hosp_max)
+#write.csv(prop_miss_hosp_v, "data/200_miss_hosp.csv")
+
+# (b) proportion of community infections that get hospitalised
+#prop_comm_hosp_v <- rnorm(200,params$prop_comm_hosp_mean, params$prop_comm_hosp_sd)
+#write.csv(prop_comm_hosp_v,"data/200_comm_hosp.csv")[,-1]
+
+# LOS data
+los_data <- list.files(path="data/los",pattern=paste0('^',"MOCK",'_200_.*csv'), full.names = TRUE) %>%
+  lapply(fread) %>%
+  bind_rows 
+los_data<- los_data[,-1]
+los_data$place <- "MOCK"
+
 # 2 scenarios are the symptom onset to hospitalisation
-store_scn15 <- run_hosp_traj("mock", "output_mock_scn1", los_data, nsims = 20, disch_time = 5, so_scen = 1)
+store_scn15 <- run_hosp_traj("mock", "output_mock_scn1", los_data, nsims = 2, disch_time = 5, so_scen = 1)
 store_scn15$scen_so <- 1
 write.csv(store_scn15,"output_mock_scn1/mock_scn15_store.csv")
-store_scn11 <- run_hosp_traj("mock", "output_mock_scn1", los_data, nsims = 20, disch_time = 1, so_scen = 1)
+store_scn11 <- run_hosp_traj("mock", "output_mock_scn1", los_data, nsims = 2, disch_time = 1, so_scen = 1)
 store_scn11$scen_so <- 1
 write.csv(store_scn11,"output_mock_scn1/mock_scn11_store.csv")
 
-store_scn25 <- run_hosp_traj("mock", "output_mock_scn2", los_data, nsims = 20, disch_time = 5, so_scen = 2)
+store_scn25 <- run_hosp_traj("mock", "output_mock_scn2", los_data, nsims = 2, disch_time = 5, so_scen = 2)
 store_scn25$scen_so <- 2
 write.csv(store_scn25,"output_mock_scn2/mock_scn25_store.csv")
-store_scn21 <- run_hosp_traj("mock", "output_mock_scn2", los_data, nsims = 20, disch_time = 1, so_scen = 2)
+store_scn21 <- run_hosp_traj("mock", "output_mock_scn2", los_data, nsims = 2, disch_time = 1, so_scen = 2)
 store_scn21$scen_so <- 2
 write.csv(store_scn21,"output_mock_scn2/mock_scn21_store.csv")
 
-store_scn35 <- run_hosp_traj("mock", "output_mock_scn3", los_data, nsims = 20, disch_time = 5, so_scen = 3)
+store_scn35 <- run_hosp_traj("mock", "output_mock_scn3", los_data, nsims = 2, disch_time = 5, so_scen = 3)
 store_scn35$scen_so <- 3
 write.csv(store_scn35,"output_mock_scn3/mock_scn35_store.csv")
-store_scn31 <- run_hosp_traj("mock", "output_mock_scn3", los_data, nsims = 20, disch_time = 1, so_scen = 3)
+store_scn31 <- run_hosp_traj("mock", "output_mock_scn3", los_data, nsims = 2, disch_time = 1, so_scen = 3)
 store_scn31$scen_so <- 3
 write.csv(store_scn31,"output_mock_scn3/mock_scn31_store.csv")
 

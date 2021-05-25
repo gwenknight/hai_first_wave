@@ -1,11 +1,19 @@
-### Function to analyse the output of the simulation runs
+### Function to analyse the output
 
-analyse_store <- function(store, name_o, output_location){
+analyse_store <- function(store_in, name_o, output_location){
   
-  store$detect_date <- as.Date(store$detect_date)
-  store$r <- as.character(store$r)
-  w<-which(is.na(store$r))
-  store[w,"r"] <- "rt"
+  store_in$detect_date <- as.Date(store_in$detect_date)
+  store_in$r <- as.character(store_in$r)
+  w<-which(is.na(store_in$r))
+  store_in[w,"r"] <- "rt"
+  
+  ##### If more than one place then combine
+  u <- unique(store_in$place)
+  if(length(u) != 1){
+    store <- store_in %>% pivot_longer(cols = "n_noso_o":"perc_noso_linked_hi")
+  }else{
+    store <- store_in
+  }
   
   ####### NEW TRAJECTORIES
   ### Community cases 
@@ -14,9 +22,9 @@ analyse_store <- function(store, name_o, output_location){
   store$n_hosp_orig <- pmax(0,store$n_noso_o)
   
   # FINAL 
-  store$n_coca <- pmax(0,store$n_all - store$n_noso - store$n_miss_hosp_case)
+  store$n_coca <- pmax(0,store$n_all - store$n_noso - store$n_miss_hosp_case_ad)
   store$n_hoha <- store$n_noso # assume detect all 
-  store$n_coha <- store$n_miss_hosp_case 
+  store$n_coha <- store$n_miss_hosp_case_ad 
   store$n_cohl <- store$fstgen_cases + store$scdgen_cases + store$trdgen_cases + store$fthgen_cases 
   store$n_cohl_lo <- store$fstgen_cases_lo + store$scdgen_cases_lo + store$trdgen_cases_lo + store$fthgen_cases_lo
   store$n_cohl_hi <- store$fstgen_cases_hi + store$scdgen_cases_hi + store$trdgen_cases_hi + store$fthgen_cases_hi
@@ -32,7 +40,7 @@ analyse_store <- function(store, name_o, output_location){
            n_link_infect_lo = fstgen_inf_lo + scdgen_inf_lo + trdgen_inf_lo + fthgen_inf_lo,
            n_link_infect_hi = fstgen_inf_hi + scdgen_inf_hi + trdgen_inf_hi + fthgen_inf_hi) %>%
     dplyr::select(sim_id, place, cutoff, disch_time, detect_date, r, scen_so, n_comm_orig, n_hosp_orig,
-                  n_all, n_hoha, n_missed,n_link_infect,n_link_infect_lo, n_link_infect_hi,
+                  n_all, n_hoha, n_missed_disch, n_missed_ad_disch,n_link_infect,n_link_infect_lo, n_link_infect_hi,
                   n_coha, n_cf, n_coca, 
                   n_cohl,n_cohl_lo, n_cohl_hi) %>% 
     pivot_longer(cols = c(n_comm_orig:n_cohl_hi)) %>%
@@ -51,7 +59,7 @@ analyse_store <- function(store, name_o, output_location){
     mutate(n_coca_orig = n_all - n_hoha, 
            total_hosp_acq = n_coha + n_hoha,
            #perc_hosp_acq = 100*(total_hosp_acq)/n_all, # take sum later 
-           n_due_to_hosp = total_hosp_acq + n_missed,
+           n_due_to_hosp = total_hosp_acq + n_missed_disch,
            n_comm_ctosus = n_all - n_hoha,
            n_hospcase = n_hoha+n_coha,
            n_coca = n_all - n_hospcase) %>%
@@ -70,8 +78,8 @@ analyse_store <- function(store, name_o, output_location){
   tcf_range <- tcf_t %>%
     summarise(up = quantile(sum,probs=c(.05)),
               down = quantile(sum,probs=c(.95)))
-      
-    
+  
+  
   tcf <- left_join(left_join(tcf_mean, tcf_sd, by = c("place", "r","cutoff","name","scen_so")), tcf_range, by = c("place", "r","cutoff","name","scen_so"))
   tcf$perc_sd = 100*tcf$sd_sum/tcf$mean_sum
   ggplot(tcf, aes(x=r, y = mean_sum, group = name)) + geom_point(aes(col=name)) + 
@@ -79,14 +87,15 @@ analyse_store <- function(store, name_o, output_location){
   
   tcf[,c("r","cutoff","name","mean_sum","sd_sum","up","down","scen_so")] %>% filter(r == "rt", name == "n_hoha") %>% mutate(nearest = round(mean_sum,-1))
   
-  tcf[,c("r","cutoff","name","mean_sum","sd_sum","up","down","scen_so")] %>% filter(r == "rt", name == "n_missed") %>% mutate(nearest = round(mean_sum,-1))
+  tcf[,c("r","cutoff","name","mean_sum","sd_sum","up","down","scen_so")] %>% filter(r == "rt", name == "n_missed_disch") %>% mutate(nearest = round(mean_sum,-1))
+  tcf[,c("r","cutoff","name","mean_sum","sd_sum","up","down","scen_so")] %>% filter(r == "rt", name == "n_missed_ad_disch") %>% mutate(nearest = round(mean_sum,-1))
   
   tcf[,c("r","cutoff","name","sd_sum","scen_so")] %>% filter(r == "rt", name == "n_hoha")
-  tcf[,c("r","cutoff","name","sd_sum","scen_so")] %>% filter(r == "rt", name == "n_missed")
+  tcf[,c("r","cutoff","name","sd_sum","scen_so")] %>% filter(r == "rt", name == "n_missed_ad_disch")
   
   tcf[,c("r","cutoff","name","mean_sum","sd_sum","scen_so")] %>% filter(cutoff == 5, r == "rt")
   
-  write.csv(tcf, paste0(output_location,"/",name_o,"ENG_cf_values.csv"))
+  write.csv(tcf, paste0(output_location,"/",name_o,"_cf_values.csv"))
   
   # How much do missed infections contribute? 
   tcf_t[,c("sim_id","r","cutoff","name","sum","scen_so","disch_time")] %>% 
@@ -112,7 +121,7 @@ analyse_store <- function(store, name_o, output_location){
               mean_hi = mean(perc_cohl_hi), sd_hi = sd(perc_cohl_hi),up_hi = range(perc_cohl_hi)[1], down_hi = range(perc_cohl_hi)[2])
   
   tcf_t[,c("sim_id","r","cutoff","name","sum","scen_so","disch_time")] %>% filter(r == "rt", name %in% c("n_cohl","n_cohl_lo","n_cohl_hi",
-                                                                                  "n_link_infect","n_link_infect_hi","n_link_infect_lo")) %>% ungroup() %>%
+                                                                                                         "n_link_infect","n_link_infect_hi","n_link_infect_lo")) %>% ungroup() %>%
     pivot_wider(values_from = sum, names_from = name) %>%
     group_by(cutoff,scen_so) %>%
     summarise(mean = round(mean(n_cohl),-1), 
@@ -128,7 +137,7 @@ analyse_store <- function(store, name_o, output_location){
   
   
   ### Supplementary table: additional results
-  tcf_t %>% filter(r == 0.8, name %in% c("n_hosp_orig", "n_hoha", "n_missed"), sim_id == 1) %>% # simulation doesn't affect these underlying numbers
+  tcf_t %>% filter(r == 0.8, name %in% c("n_hosp_orig", "n_hoha", "n_missed_ad_disch"), sim_id == 1) %>% # simulation doesn't affect these underlying numbers
     pivot_wider(names_from = name, values_from = sum) 
   
   
@@ -209,9 +218,9 @@ analyse_store <- function(store, name_o, output_location){
   ggsave(paste0(output_location,"/",name_o,"S_timeseries_community_zoom.jpeg"), width = 10)
   
   ### proportions plot
-  cf_new2 <- cf_new %>% filter(name %in% c("n_hoha","n_coha","n_cohl","n_all","n_comm_orig","n_cf","n_hosp_orig"))
-  cf_new2$name <- factor(cf_new2$name, levels = c("n_hoha","n_coha","n_cohl","n_all","n_comm_orig","n_cf","n_hosp_orig"))
-  cf_new %>% filter(r =="rt") %>% 
+  cf_new2 <- cf_new %>% filter(name %in% c("n_coca","n_hoha","n_coha","n_cohl","n_all","n_comm_orig","n_cf","n_hosp_orig"))
+  cf_new2$name <- factor(cf_new2$name, levels = c("n_hoha","n_coha","n_coca","n_cohl","n_all","n_comm_orig","n_cf","n_hosp_orig"))
+  cf_new2 %>% filter(r =="rt") %>% 
     filter(name %in% c("n_coca", "n_hoha","n_cohl","n_coha")) %>%
     ggplot(aes(x=detect_date, y = value, group = interaction(name,cutoff, r))) + 
     geom_bar(stat = "identity",position = "fill",aes(fill = name, colour = name)) + 
@@ -225,33 +234,33 @@ analyse_store <- function(store, name_o, output_location){
   
   
   #### Impact of 1-5 day discharge
-  cf_new15 <- store %>% filter(r == "rt", cutoff == 5,
+  cf_new15 <- store %>% filter(cutoff == 8,
                                detect_date < as.Date("2020-07-31")) %>%
-    dplyr::select(c("detect_date", "sim_id","disch_time", "n_hoha","n_coca","n_coha")) %>%
+    dplyr::select(c("detect_date", "sim_id","disch_time", "n_hoha","n_coca","n_coha","r", "scen_so")) %>%
     ungroup() %>% 
     pivot_longer(cols = n_hoha:n_coha) %>%
-    group_by(detect_date,disch_time,name) %>% 
+    group_by(detect_date,disch_time,name,r, scen_so) %>% 
     summarise(mean_sims = mean(value, na.rm = TRUE)) %>%
     ungroup() %>% 
-    group_by(disch_time, name) %>% 
+    group_by(disch_time, name, r, scen_so) %>% 
     mutate(mean_7=rollapply(mean_sims,7,mean,fill=NA)) %>%
     dplyr::select(-mean_sims) %>%
     ungroup() %>% 
     pivot_wider(names_from = name, values_from = mean_7) %>%
-    dplyr::select(detect_date, disch_time, n_coca, n_coha,n_hoha) %>% 
+    dplyr::select(detect_date, disch_time, n_coca, n_coha,n_hoha, r, scen_so) %>% 
     pivot_longer(cols = n_coca:n_hoha)
   
   cf_new15$name <- factor(cf_new15$name, levels = c("n_coca","n_hoha","n_coha"))
-  ggplot(cf_new15, aes(x=detect_date, y = value, group = interaction(disch_time,name))) + 
+  ggplot(cf_new15 %>% filter(scen_so == 1, r == "rt"), aes(x=detect_date, y = value, group = interaction(disch_time,name))) + 
     geom_line(aes(col = name, lty = factor(disch_time))) + 
     scale_color_discrete(breaks = c("n_coca","n_hoha","n_coha"), 
                          labels = c("COCA","HOHA","COHA")) + 
     scale_x_date("Detection date") + 
     scale_y_continuous("Number of cases") + 
-    scale_linetype_discrete("Discharge time\nof missed cases") 
+    scale_linetype_discrete("Discharge time\nof missed cases") + 
+    facet_wrap(r ~ scen_so)
   ggsave(paste0(output_location,"/",name_o,"S_disch_time.jpeg"))
-
+  
 }
 
-  
-  
+

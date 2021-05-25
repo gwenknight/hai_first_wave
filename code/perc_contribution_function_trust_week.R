@@ -6,7 +6,6 @@
 ### prob_los_o = length of stay
 ### rt = r estimates over time for community transmission (can be constant)
 ### disch_time = how deal with when missing cases are discharged
-### so_scen = scenario for symptom onset to hospitalisation 
 ### ***********
 
 ##### FUNCTION FOR CONTRIBUTION OF NOSOCOMIAL TO OVERALL EPIDEMIC
@@ -39,14 +38,16 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
     df_noso$n_miss_hosp_case_ad <- 0
     df_noso$n_miss_hosp_case_in14 <- 0 # if return in 14 days
     df_noso$n_miss_hosp_case_in14_ad <- 0 # if return in 14 days
+    ### Readmission tracker - no longer used actively
     df_noso$readmin_nc <- 0
     df_noso$readmin_nc_ad <- 0
-
+    
     
     for(i in 1:end){ # dates
-
+      
       if(df_noso[i,"n_missed_disch"] > 0){
-        n_hosp <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),runif(as.numeric(df_noso[i,"n_missed_disch"]),prop_miss_hosp_min, prop_miss_hosp_max)))
+        #n_hosp <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),runif(as.numeric(df_noso[i,"n_missed_disch"]),prop_miss_hosp_min, prop_miss_hosp_max)))
+        n_hosp <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),prop_miss_hosp))
       }else{n_hosp = 0} # those infections that get hospitalized for COVID19
       
       prob_los <- as.numeric(unlist(prob_los_o %>% filter(week == as.numeric(df_noso[i,"week"])) %>% dplyr::select(prop)))
@@ -65,13 +66,14 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
         df_noso$n_miss_hosp_case[i] <- as.numeric(symp_on_dish) + df_noso$n_miss_hosp_case[i]}
         w<-which(i + as.numeric(names(time_hosp_case)) <= dim(df_noso)[1]) # cap at dim df_noso
         df_noso$n_miss_hosp_case[i + as.numeric(names(time_hosp_case[w]))] <- as.numeric(time_hosp_case[w]) + df_noso$n_miss_hosp_case[i + as.numeric(names(time_hosp_case[w]))]
-        w<-which(as.numeric(names(time_hosp_case)) < 15) # cap at return in 14 days
+        w<-which(as.numeric(names(time_hosp_case)) < 15) # cap at return in 14 days (don't use in main analysis atm)
         df_noso$n_miss_hosp_case_in14[i + as.numeric(names(time_hosp_case[w]))] <- as.numeric(time_hosp_case[w]) + df_noso$n_miss_hosp_case_in14[i + as.numeric(names(time_hosp_case[w]))]
       }
       
       ### BASED ON ONLY THOSE SO / TEST AFTER DISCHARGE
       if(df_noso[i,"n_missed_ad_disch"]>0){
-        n_hosp_ad <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),runif(as.numeric(df_noso[i,"n_missed_ad_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))) # those infections that get hospitalized for COVID19
+        #n_hosp_ad <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),runif(as.numeric(df_noso[i,"n_missed_ad_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))) # those infections that get hospitalized for COVID19
+        n_hosp_ad <- sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),prop_miss_hosp))
       }else(n_hosp_ad = 0)
       
       if(n_hosp_ad > 0 ){ # if some to be sampled
@@ -80,7 +82,7 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
         times_from_infec_to_symp <- rlnorm(as.numeric(n_hosp_ad), time_inf_to_symp_mean,time_inf_to_symp_sd)
         if(so_scen == 1){times_from_symp_to_hosp <- rlnorm(as.numeric(n_hosp_ad), meanlog = time_symp_to_hosp_meanlog, sdlog = time_symp_to_hosp_sdlog)}
         if(so_scen == 2){times_from_symp_to_hosp <- rgamma(as.numeric(n_hosp_ad), shape = time_symp_to_hosp_shape, scale = time_symp_to_hosp_scale)}
-        if(so_scen == 3){times_from_symp_to_hosp <- rlnorm(as.numeric(n_hosp), meanlog = time_symp_to_hosp_meanlog3, sdlog = time_symp_to_hosp_sdlog3)}
+        if(so_scen == 3){times_from_symp_to_hosp <- rlnorm(as.numeric(n_hosp_ad), meanlog = time_symp_to_hosp_meanlog3, sdlog = time_symp_to_hosp_sdlog3)}
         times_from_infec_to_hosp <- times_from_infec_to_symp + times_from_symp_to_hosp
         times_from_discharge_to_hosp <- round(pmax(0,times_from_infec_to_hosp - times_from_infection_to_discharge),0)
         time_hosp_case <- table(times_from_discharge_to_hosp)
@@ -97,7 +99,8 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
       # Those admitted for other reasons: 14% get emergency readmissions. 90% within 14 days
       # Take to be 14% of those not hospitalised for COVID19 as some of those for C19 would be in the readmissions
       if(df_noso[i,"n_missed_disch"]>0){
-        n_readmin_nc <-  prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),(1 - runif(as.numeric(df_noso[i,"n_missed_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))))
+        #n_readmin_nc <- prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),(1 - runif(as.numeric(df_noso[i,"n_missed_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))))
+        n_readmin_nc <- prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_disch"]),(1 - prop_miss_hosp)))
       }else{n_readmin_nc = 0}
       #OLD: as.numeric(round(prop_readm_nc*(1 - runif(1,prop_miss_hosp_min, prop_miss_hosp_max))*df_noso[i,"n_missed_disch"],0))
       
@@ -111,7 +114,8 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
       # Those admitted for other reasons: 14% get emergency readmissions. 90% within 14 days
       # Take to be 14% of those not hospitalised for COVID19 as some of those for C19 would be in the readmissions
       if(df_noso[i,"n_missed_ad_disch"]>0){
-        n_readmin_nc_ad <-  prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),(1 - runif(as.numeric(df_noso[i,"n_missed_ad_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))))
+        #n_readmin_nc_ad <-  prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),(1 - runif(as.numeric(df_noso[i,"n_missed_ad_disch"]),prop_miss_hosp_min, prop_miss_hosp_max))))
+        n_readmin_nc_ad <-  prop_readm_nc*sum(rbernoulli(as.numeric(df_noso[i,"n_missed_ad_disch"]),(1 - prop_miss_hosp)))
       }else(n_readmin_nc_ad = 0)
       # OLD: as.numeric(round(prop_readm_nc*(1 - runif(1,prop_miss_hosp_min, prop_miss_hosp_max)) *df_noso[i,"n_missed_ad_disch"],0))
       if(n_readmin_nc_ad > 0){
@@ -141,88 +145,88 @@ perc_nosocomial_trust_week<- function(df_noso, params, prob_los_o, rt, disch_tim
       rtu[1,c("median","upper_50","lower_50")] <- c(rt, 1.05*rt, 0.95*rt)
     }
     
-    fstgen <- gen_trans(df_noso$n_missed*we_inf, rtu$median, so_scen = so_scen)
+    fstgen <- gen_trans(df_noso$n_missed_ad_disch*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$fstgen_inf <- as.numeric(fstgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fstgen_cases <- as.numeric(fstgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$scdgen_inf <- as.numeric(scdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$scdgen_cases <- as.numeric(scdgen$n_trans_cases[1:length(df_noso$detect_date)])
-  
-    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    
+    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$trdgen_inf <- as.numeric(trdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$trdgen_cases <- as.numeric(trdgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$fthgen_inf <- as.numeric(fthgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fthgen_cases <- as.numeric(fthgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$fvtgen_inf <- as.numeric(fvtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fvtgen_cases <- as.numeric(fvtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$sxtgen_inf <- as.numeric(sxtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$sxtgen_cases <- as.numeric(sxtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$median, so_scen = so_scen)
+    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$median, so_scen = so_scen, params)
     df_noso$svtgen_inf <- as.numeric(svtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$svtgen_cases <- as.numeric(svtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
     ## Uncertainty due to RT
-    fstgen <- gen_trans(df_noso$n_missed*we_inf, rtu$lower_50, so_scen = so_scen)
+    fstgen <- gen_trans(df_noso$n_missed_ad_disch*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$fstgen_inf_lo <- as.numeric(fstgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fstgen_cases_lo <- as.numeric(fstgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$scdgen_inf_lo <- as.numeric(scdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$scdgen_cases_lo <- as.numeric(scdgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$trdgen_inf_lo <- as.numeric(trdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$trdgen_cases_lo <- as.numeric(trdgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$fthgen_inf_lo <- as.numeric(fthgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fthgen_cases_lo <- as.numeric(fthgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$fvtgen_inf_lo <- as.numeric(fvtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fvtgen_cases_lo <- as.numeric(fvtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$sxtgen_inf_lo <- as.numeric(sxtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$sxtgen_cases_lo <- as.numeric(sxtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$lower_50, so_scen = so_scen)
+    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$lower_50, so_scen = so_scen, params)
     df_noso$svtgen_inf_lo <- as.numeric(svtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$svtgen_cases_lo <- as.numeric(svtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fstgen <- gen_trans(df_noso$n_missed*we_inf, rtu$upper_50, so_scen = so_scen)
+    fstgen <- gen_trans(df_noso$n_missed_ad_disch*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$fstgen_inf_hi <- as.numeric(fstgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fstgen_cases_hi <- as.numeric(fstgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    scdgen <- gen_trans(df_noso$fstgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$scdgen_inf_hi <- as.numeric(scdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$scdgen_cases_hi <- as.numeric(scdgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    trdgen <- gen_trans(df_noso$scdgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$trdgen_inf_hi <- as.numeric(trdgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$trdgen_cases_hi <- as.numeric(trdgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    fthgen <- gen_trans(df_noso$trdgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$fthgen_inf_hi <- as.numeric(fthgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fthgen_cases_hi <- as.numeric(fthgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    fvtgen <- gen_trans(df_noso$fthgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$fvtgen_inf_lo <- as.numeric(fvtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$fvtgen_cases_lo <- as.numeric(fvtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    sxtgen <- gen_trans(df_noso$fvtgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$sxtgen_inf_lo <- as.numeric(sxtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$sxtgen_cases_lo <- as.numeric(sxtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
-    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$upper_50, so_scen = so_scen)
+    svtgen <- gen_trans(df_noso$sxtgen_inf*we_inf, rtu$upper_50, so_scen = so_scen, params)
     df_noso$svtgen_inf_lo <- as.numeric(svtgen$n_trans[1:length(df_noso$detect_date)])
     df_noso$svtgen_cases_lo <- as.numeric(svtgen$n_trans_cases[1:length(df_noso$detect_date)])
     
