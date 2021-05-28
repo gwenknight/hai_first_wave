@@ -28,5 +28,5 @@ Access to CO-CIN can be requested through the ISARIC consortium: https://isaric4
 
 Access to SUS is through the NHS: https://digital.nhs.uk/services/secondary-uses-service-sus
 
-Mock data is included in the data file for the length of stay and incidence for a "mock" trust to allow the final results to be generated.
+The data folder includes rt estimates and mock data for the length of stay and incidence for a "mock" trust to allow the final results to be generated.
 
